@@ -3,75 +3,161 @@ package Mapa;
 import java.util.*;
 
 public class Grafo {
-    private List<Nodo> nodos = new ArrayList<>();
-    private List<Arista> aristas = new ArrayList<>();
+    private final List<Nodo> nodos = new ArrayList<>();
+    private final List<Arista> aristas = new ArrayList<>();
 
-    public void agregarNodo(int id, int victimas) {
-            nodos.add(new Nodo(id, victimas));
-            // crea nodo y lo agrega al array
-    }
+    // ==== Construcción del grafo ====
+    public void agregarNodo(int id, int victimas) { nodos.add(new Nodo(id, victimas)); }
+    public void agregarArista(int origen, int destino, int distancia) { aristas.add(new Arista(origen, destino, distancia)); }
 
-    public void agregarArista(int origen, int destino, int distancia) {
-        aristas.add(new Arista(origen, destino, distancia));
-        //crea Arista y la agrega al array
-    }
-
-    public List<Nodo> getNodos() {
-        return nodos;
-    }
-
-    public List<Arista> getAristas() {
-        return aristas;
-    }
+    public List<Nodo> getNodos() { return nodos; }
+    public List<Arista> getAristas() { return aristas; }
 
     public List<Arista> obtenerVecinos(int nodoId) {
         List<Arista> vecinos = new ArrayList<>();
-        for (Arista arista : aristas) {
-            if (arista.getOrigen() == nodoId) {
-                vecinos.add(arista);
-            }
-        }
+        for (Arista a : aristas) if (a.getOrigen() == nodoId) vecinos.add(a);
         return vecinos;
     }
 
+    // ==== Grafo aleatorio: nodos con víctimas 0..10 y m aristas sin duplicados ====
+    // Si m >= n-1 asegura conectividad básica (cadena aleatoria) y luego agrega extras.
     public void crearGrafoAleatorio(int n, int m) {
-        // nos llega desde el main n cantidad de nodos y m cantidad de aristas
         Random random = new Random();
 
-        // Crear nodos con víctimas aleatorias
+        nodos.clear();
+        aristas.clear();
+
         for (int i = 0; i < n; i++) {
-            int victimas = random.nextInt(11); // 0 a 10 víctimas posibles
-            this.agregarNodo(i, victimas); // se agrega el nodo con esas víctimas al grafo
+            int victimas = random.nextInt(11);
+            this.agregarNodo(i, victimas);
         }
-        //-----------CRUCIAL---------------//
-        Set<String> conexionesExistentes = new HashSet<>();
-        // Aca usamos set para no repetir la creation de una arista que ya estaba con una distancia puesta ya que seria como crear un camino con 2 distancias diferentes
-        // Set es como una lista que no permite duplicados.
-        // HashSet es una de las implementaciones más comunes de Set en Java.
-        // Cuando haces add(...), si ese elemento ya existe, simplemente no lo vuelve a agregar.
 
-        // -------------------------------//
-        int aristasCreadas = 0; // Empezamos en 0
+        Set<String> conexiones = new HashSet<>();
+        int creadas = 0;
 
-        // Crear m aristas aleatorias sin repetir conexiones
-        while (aristasCreadas < m) {
-            int u = random.nextInt(n); // de acuerdo con la instruccion este u es el nodo de origen
-            int v = random.nextInt(n); // y este es v es el nodo de destino
-
-            if (u != v) { // si el origen es diferente del destino creado se hace esto, si no es como si no contara
-                String camino= u + "->" + v; // este es el "camino"
-                if (!conexionesExistentes.contains(camino)) { // si aun no hemos creado este camino lo creamos (por eso usamos lo de CRUCIAL)
-                    // este .contains va a revisar si dentro de las aristas existentes ya esta este camino:
-                    // si ya esta !true -> false
-                    // si no esta !false -> true
-                    int distancia = 1 + random.nextInt(20); // hacemos distancia entre 1 y 20
-
-                    this.agregarArista(u, v, distancia); // agregamos arista a nuestro array de aristas
-                    conexionesExistentes.add(camino); // agregamos a nuestro validador de caminos existentes
-                    aristasCreadas++; // aumentamos el contador en 1
+        if (n > 1 && m >= n - 1) {
+            List<Integer> orden = new ArrayList<>();
+            for (int i = 0; i < n; i++) orden.add(i);
+            Collections.shuffle(orden, random);
+            for (int i = 0; i < n - 1 && creadas < m; i++) {
+                int u = orden.get(i), v = orden.get(i + 1);
+                if (u == v) continue;
+                String key = u + "->" + v;
+                if (conexiones.add(key)) {
+                    int dist = 1 + random.nextInt(20);
+                    agregarArista(u, v, dist);
+                    creadas++;
                 }
+            }
+        }
+
+        while (creadas < m) {
+            int u = random.nextInt(n), v = random.nextInt(n);
+            if (u == v) continue;
+            String key = u + "->" + v;
+            if (conexiones.add(key)) {
+                int dist = 1 + random.nextInt(20);
+                agregarArista(u, v, dist);
+                creadas++;
             }
         }
     }
 
+    // ==== Resultado genérico de camino ====
+    public static class PathResult {
+        public final List<Integer> path;
+        public final int value; // distancia total (Dijkstra) o víctimas totales (Bellman-Ford)
+        public PathResult(List<Integer> path, int value) { this.path = path; this.value = value; }
+    }
+
+    // ==== Dijkstra: camino más corto ====
+    public PathResult dijkstra(int start, int target) {
+        int n = nodos.size();
+        int[] dist = new int[n];
+        int[] parent = new int[n];
+        Arrays.fill(dist, Integer.MAX_VALUE);
+        Arrays.fill(parent, -1);
+        dist[start] = 0;
+
+        PriorityQueue<int[]> pq = new PriorityQueue<>(Comparator.comparingInt(a -> a[1]));
+        pq.add(new int[]{start, 0});
+
+        while (!pq.isEmpty()) {
+            int[] cur = pq.poll();
+            int u = cur[0], d = cur[1];
+            if (d != dist[u]) continue;
+            if (u == target) break;
+
+            for (Arista e : obtenerVecinos(u)) {
+                int v = e.getDestino();
+                int nd = d + e.getDistancia();
+                if (nd < dist[v]) {
+                    dist[v] = nd;
+                    parent[v] = u;
+                    pq.add(new int[]{v, nd});
+                }
+            }
+        }
+
+        List<Integer> path = reconstruir(parent, start, target);
+        return new PathResult(path, dist[target]);
+    }
+
+    private List<Integer> reconstruir(int[] parent, int start, int target) {
+        LinkedList<Integer> path = new LinkedList<>();
+        if (start == target) { path.add(start); return path; }
+        if (target < 0 || target >= parent.length) return path;
+        if (parent[target] == -1) return path;
+        int cur = target;
+        path.addFirst(cur);
+        while (cur != start) {
+            cur = parent[cur];
+            if (cur == -1) { path.clear(); return path; }
+            path.addFirst(cur);
+        }
+        return path;
+    }
+
+    // ==== Bellman-Ford adaptado: maximizar víctimas SIN contar doble ====
+    public PathResult maxVictimasBellmanFord(int start, int target) {
+        int n = nodos.size();
+        int NEG_INF = Integer.MIN_VALUE / 4;
+
+        int[] score = new int[n];
+        int[] parent = new int[n];
+        BitSet[] visitedSet = new BitSet[n];
+
+        Arrays.fill(score, NEG_INF);
+        Arrays.fill(parent, -1);
+        for (int i = 0; i < n; i++) visitedSet[i] = new BitSet(n);
+
+        score[start] = 0;
+        visitedSet[start].set(start); // evita contarlo luego
+
+        boolean updated;
+        for (int it = 0; it < n - 1; it++) {
+            updated = false;
+            for (Arista e : aristas) {
+                int u = e.getOrigen(), v = e.getDestino();
+                if (score[u] == NEG_INF) continue;
+                if (visitedSet[u].get(v)) continue; // no repetir nodos
+
+                int gain = nodos.get(v).getVictimas(); // solo 1ª vez
+                int cand = score[u] + gain;
+                if (cand > score[v]) {
+                    score[v] = cand;
+                    parent[v] = u;
+                    BitSet bs = (BitSet) visitedSet[u].clone();
+                    bs.set(v);
+                    visitedSet[v] = bs;
+                    updated = true;
+                }
+            }
+            if (!updated) break;
+        }
+
+        List<Integer> path = reconstruir(parent, start, target);
+        return new PathResult(path, score[target]);
+    }
 }
+

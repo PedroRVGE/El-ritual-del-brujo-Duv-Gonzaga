@@ -6,28 +6,55 @@ import Mapa.Nodo;
 
 import java.awt.Desktop;
 import java.io.*;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
 public class ExportadorDot {
 
-    public static void exportarYMostrar(Grafo grafo, String archivoDot, String archivoImagen) {
-        generarArchivoDot(grafo, archivoDot);
+    // API con resaltado y marcando inicio/guarida
+    public static void exportarYMostrar(Grafo grafo, String archivoDot, String archivoImagen,
+                                        List<Integer> caminoCorto, List<Integer> caminoVictimas,
+                                        int start, int lair) {
+        generarArchivoDot(grafo, archivoDot, caminoCorto, caminoVictimas, start, lair);
         generarImagen(archivoDot, archivoImagen);
         abrirImagen(archivoImagen);
     }
 
-    private static void generarArchivoDot(Grafo grafo, String archivoDot) {
+    private static void generarArchivoDot(Grafo grafo, String archivoDot,
+                                          List<Integer> caminoCorto, List<Integer> caminoVictimas,
+                                          int start, int lair) {
         try (PrintWriter writer = new PrintWriter(new FileWriter(archivoDot))) {
             writer.println("digraph G {");
+            writer.println("rankdir=LR; node [shape=ellipse, fontname=\"Helvetica\"]; edge [fontname=\"Helvetica\"];");
 
-            // Nodos con etiquetas
+            // Nodos
             for (Nodo nodo : grafo.getNodos()) {
-                writer.printf("%d [label=\"%d\\nVíctimas: %d\"];\n", nodo.getId(), nodo.getId(), nodo.getVictimas());
+                writer.printf("%d [label=\"%d\\nVíctimas: %d\"];\n",
+                        nodo.getId(), nodo.getId(), nodo.getVictimas());
             }
+            // Resaltar inicio/guarida
+            writer.printf("%d [shape=box, color=green, penwidth=2.0];\n", start);
+            writer.printf("%d [shape=doublecircle, color=black, penwidth=2.0];\n", lair);
 
-            // Aristas con etiquetas
+            // Aristas coloreadas según los caminos
+            Set<String> cortoEdges = pathEdges(caminoCorto);
+            Set<String> victiEdges = pathEdges(caminoVictimas);
+
             for (Arista arista : grafo.getAristas()) {
-                writer.printf("%d -> %d [label=\"Dist: %d\"];\n",
-                        arista.getOrigen(), arista.getDestino(), arista.getDistancia());
+                String key = arista.getOrigen() + "->" + arista.getDestino();
+                String style;
+                if (cortoEdges.contains(key) && victiEdges.contains(key)) {
+                    style = "color=purple, penwidth=3.0";
+                } else if (cortoEdges.contains(key)) {
+                    style = "color=red, penwidth=3.0";
+                } else if (victiEdges.contains(key)) {
+                    style = "color=blue, penwidth=3.0";
+                } else {
+                    style = "color=gray";
+                }
+                writer.printf("%d -> %d [label=\"Dist: %d\", %s];\n",
+                        arista.getOrigen(), arista.getDestino(), arista.getDistancia(), style);
             }
 
             writer.println("}");
@@ -37,15 +64,29 @@ public class ExportadorDot {
         }
     }
 
+    private static Set<String> pathEdges(List<Integer> path) {
+        Set<String> s = new HashSet<>();
+        if (path == null) return s;
+        for (int i = 0; i + 1 < path.size(); i++) {
+            s.add(path.get(i) + "->" + path.get(i + 1));
+        }
+        return s;
+    }
+
     private static void generarImagen(String archivoDot, String archivoImagen) {
         try {
             ProcessBuilder pb = new ProcessBuilder("dot", "-Tpng", archivoDot, "-o", archivoImagen);
-            pb.inheritIO(); // para ver errores si los hay
+            pb.inheritIO();
             Process process = pb.start();
-            process.waitFor();
-            System.out.println("Imagen generada: " + archivoImagen);
+            int code = process.waitFor();
+            if (code == 0) {
+                System.out.println("Imagen generada: " + archivoImagen);
+            } else {
+                System.err.println("Graphviz (dot) terminó con código " + code);
+            }
         } catch (IOException | InterruptedException e) {
             e.printStackTrace();
+            Thread.currentThread().interrupt();
         }
     }
 
@@ -60,3 +101,4 @@ public class ExportadorDot {
         }
     }
 }
+

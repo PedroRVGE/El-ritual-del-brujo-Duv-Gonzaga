@@ -1,7 +1,7 @@
 package Mapa;
 
 public class Nodo {
-    private int id;
+    private final int id;
     private int victimas;
 
     public Nodo(int id, int victimas) {
@@ -9,13 +9,9 @@ public class Nodo {
         this.victimas = victimas;
     }
 
-    public int getId() {
-        return id;
-    }
-
-    public int getVictimas() {
-        return victimas;
-    }
+    public int getId() { return id; }
+    public int getVictimas() { return victimas; }
+    public void setVictimas(int victimas) { this.victimas = victimas; }
 
     @Override
     public String toString() {
@@ -25,4 +21,3 @@ public class Nodo {
                 '}';
     }
 }
-
