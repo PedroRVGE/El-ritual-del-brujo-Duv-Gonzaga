@@ -12,30 +12,32 @@ import java.util.Set;
 
 public class ExportadorDot {
 
-    // API con resaltado y marcando inicio/guarida
+    // API con resaltado y marcando inicio/guarida (en español dentro del label)
     public static void exportarYMostrar(Grafo grafo, String archivoDot, String archivoImagen,
                                         List<Integer> caminoCorto, List<Integer> caminoVictimas,
-                                        int start, int lair) {
-        generarArchivoDot(grafo, archivoDot, caminoCorto, caminoVictimas, start, lair);
+                                        int inicio, int guarida) {
+        generarArchivoDot(grafo, archivoDot, caminoCorto, caminoVictimas, inicio, guarida);
         generarImagen(archivoDot, archivoImagen);
         abrirImagen(archivoImagen);
     }
 
     private static void generarArchivoDot(Grafo grafo, String archivoDot,
                                           List<Integer> caminoCorto, List<Integer> caminoVictimas,
-                                          int start, int lair) {
+                                          int inicio, int guarida) {
         try (PrintWriter writer = new PrintWriter(new FileWriter(archivoDot))) {
             writer.println("digraph G {");
             writer.println("rankdir=LR; node [shape=ellipse, fontname=\"Helvetica\"]; edge [fontname=\"Helvetica\"];");
 
-            // Nodos
+            // Nodos: “Aldea X”, con [Inicio]/[Guarida] cuando aplique
             for (Nodo nodo : grafo.getNodos()) {
-                writer.printf("%d [label=\"%d\\nVíctimas: %d\"];\n",
-                        nodo.getId(), nodo.getId(), nodo.getVictimas());
+                int id = nodo.getId();
+                String rol = (id == inicio) ? "\\n[Inicio]" : (id == guarida) ? "\\n[Guarida]" : "";
+                writer.printf("%d [label=\"Aldea %d%s\\nVíctimas: %d\"];\n",
+                        id, id, rol, nodo.getVictimas());
             }
-            // Resaltar inicio/guarida
-            writer.printf("%d [shape=box, color=green, penwidth=2.0];\n", start);
-            writer.printf("%d [shape=doublecircle, color=black, penwidth=2.0];\n", lair);
+            // Forma/estilo especial a inicio y guarida
+            writer.printf("%d [shape=box, color=green, penwidth=2.0];\n", inicio);
+            writer.printf("%d [shape=doublecircle, color=black, penwidth=2.0];\n", guarida);
 
             // Aristas coloreadas según los caminos
             Set<String> cortoEdges = pathEdges(caminoCorto);
@@ -56,6 +58,23 @@ public class ExportadorDot {
                 writer.printf("%d -> %d [label=\"Dist: %d\", %s];\n",
                         arista.getOrigen(), arista.getDestino(), arista.getDistancia(), style);
             }
+
+            // === Colores de caminos ===
+            writer.println();
+            writer.println("subgraph cluster_ {");
+            writer.println("  label=\"Guia colores\"; fontsize=12; color=gray; style=dashed;");
+
+            writer.println("  l1a [shape=point, width=0.1, label=\"\"];");
+            writer.println("  l1b [shape=point, width=0.1, label=\"\"];");
+            writer.println("  l2a [shape=point, width=0.1, label=\"\"];");
+            writer.println("  l2b [shape=point, width=0.1, label=\"\"];");
+            writer.println("  l3a [shape=point, width=0.1, label=\"\"];");
+            writer.println("  l3b [shape=point, width=0.1, label=\"\"];");
+
+            writer.println("  l1a -> l1b [color=red,    penwidth=3.0, label=\"Camino más corto (Dijkstra)\"];");
+            writer.println("  l2a -> l2b [color=blue,   penwidth=3.0, label=\"Camino con más víctimas\"];");
+            writer.println("  l3a -> l3b [color=purple, penwidth=3.0, label=\"Arista en ambos caminos\"];");
+            writer.println("}");
 
             writer.println("}");
             System.out.println("Archivo .dot generado: " + archivoDot);
@@ -101,4 +120,5 @@ public class ExportadorDot {
         }
     }
 }
+
 

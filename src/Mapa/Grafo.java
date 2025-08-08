@@ -119,20 +119,22 @@ public class Grafo {
     }
 
     // ==== Bellman-Ford adaptado: maximizar víctimas SIN contar doble ====
+    // Ahora incluye víctimas del nodo de inicio.
     public PathResult maxVictimasBellmanFord(int start, int target) {
         int n = nodos.size();
         int NEG_INF = Integer.MIN_VALUE / 4;
 
-        int[] score = new int[n];
-        int[] parent = new int[n];
-        BitSet[] visitedSet = new BitSet[n];
+        int[] score = new int[n];             // víctimas acumuladas máximas al llegar a i
+        int[] parent = new int[n];            // para reconstrucción del camino
+        BitSet[] visitedSet = new BitSet[n];  // nodos ya "contados" en el mejor camino a i
 
         Arrays.fill(score, NEG_INF);
         Arrays.fill(parent, -1);
         for (int i = 0; i < n; i++) visitedSet[i] = new BitSet(n);
 
-        score[start] = 0;
-        visitedSet[start].set(start); // evita contarlo luego
+        // INCLUIMOS víctimas del inicio
+        score[start] = nodos.get(start).getVictimas();
+        visitedSet[start].set(start); // marcado para no contarlo otra vez
 
         boolean updated;
         for (int it = 0; it < n - 1; it++) {
@@ -140,16 +142,20 @@ public class Grafo {
             for (Arista e : aristas) {
                 int u = e.getOrigen(), v = e.getDestino();
                 if (score[u] == NEG_INF) continue;
-                if (visitedSet[u].get(v)) continue; // no repetir nodos
 
-                int gain = nodos.get(v).getVictimas(); // solo 1ª vez
+                // Evita repetir nodos (sin doble conteo de víctimas)
+                if (visitedSet[u].get(v)) continue;
+
+                int gain = nodos.get(v).getVictimas(); // víctimas de v (solo 1ª vez)
                 int cand = score[u] + gain;
                 if (cand > score[v]) {
                     score[v] = cand;
                     parent[v] = u;
+
                     BitSet bs = (BitSet) visitedSet[u].clone();
                     bs.set(v);
                     visitedSet[v] = bs;
+
                     updated = true;
                 }
             }
