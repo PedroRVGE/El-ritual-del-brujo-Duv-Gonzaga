@@ -11,12 +11,11 @@ public class Arista {
         this.distancia = distancia;
     }
 
-    public int getOrigen() { return origen; }
-    public int getDestino() { return destino; }
+    public int getOrigen()    { return origen; }
+    public int getDestino()   { return destino; }
     public int getDistancia() { return distancia; }
 
     @Override
-    public String toString() {
-        return origen + " -> " + destino + " [distancia=" + distancia + "]";
-    }
+    public String toString() { return origen + "->" + destino + " (" + distancia + ")"; }
 }
+

@@ -6,164 +6,151 @@ public class Grafo {
     private final List<Nodo> nodos = new ArrayList<>();
     private final List<Arista> aristas = new ArrayList<>();
 
-    // ==== Construcción del grafo ====
+    // ===== Construcción y acceso =====
     public void agregarNodo(int id, int victimas) { nodos.add(new Nodo(id, victimas)); }
-    public void agregarArista(int origen, int destino, int distancia) { aristas.add(new Arista(origen, destino, distancia)); }
+    public void agregarArista(int u, int v, int d){ aristas.add(new Arista(u, v, d)); }
+    public List<Nodo>  getNodos()  { return nodos; }
+    public List<Arista> getAristas(){ return aristas; }
 
-    public List<Nodo> getNodos() { return nodos; }
-    public List<Arista> getAristas() { return aristas; }
-
-    public List<Arista> obtenerVecinos(int nodoId) {
-        List<Arista> vecinos = new ArrayList<>();
-        for (Arista a : aristas) if (a.getOrigen() == nodoId) vecinos.add(a);
-        return vecinos;
+    public List<Arista> obtenerVecinos(int u){
+        List<Arista> out = new ArrayList<>();
+        for (Arista e : aristas) if (e.getOrigen()==u) out.add(e);
+        return out;
     }
 
-    // ==== Grafo aleatorio: nodos con víctimas 0..10 y m aristas sin duplicados ====
-    // Si m >= n-1 asegura conectividad básica (cadena aleatoria) y luego agrega extras.
-    public void crearGrafoAleatorio(int n, int m) {
-        Random random = new Random();
+    // ===== Grafo aleatorio dirigido =====
+    // Sin lazos (u==v), sin duplicadas u->v y sin reverso v->u para el mismo par.
+    public void crearGrafoAleatorio(int n, int m){
+        Random r = new Random();
+        nodos.clear(); aristas.clear();
 
-        nodos.clear();
-        aristas.clear();
+        for (int i=0;i<n;i++) agregarNodo(i, r.nextInt(11)); // víctimas 0..10
 
-        for (int i = 0; i < n; i++) {
-            int victimas = random.nextInt(11);
-            this.agregarNodo(i, victimas);
-        }
-
-        Set<String> conexiones = new HashSet<>();
+        Set<String> dir = new HashSet<>();                   // "u->v"
+        Set<String> par = new HashSet<>();                   // "min<->max" bloquea reverso
         int creadas = 0;
 
-        if (n > 1 && m >= n - 1) {
+        // Conectividad mínima si alcanza (cadena dirigida aleatoria)
+        if (n>1 && m>=n-1){
             List<Integer> orden = new ArrayList<>();
-            for (int i = 0; i < n; i++) orden.add(i);
-            Collections.shuffle(orden, random);
-            for (int i = 0; i < n - 1 && creadas < m; i++) {
-                int u = orden.get(i), v = orden.get(i + 1);
-                if (u == v) continue;
-                String key = u + "->" + v;
-                if (conexiones.add(key)) {
-                    int dist = 1 + random.nextInt(20);
-                    agregarArista(u, v, dist);
-                    creadas++;
+            for (int i=0;i<n;i++) orden.add(i);
+            Collections.shuffle(orden, r);
+            for (int i=0;i<n-1 && creadas<m; i++){
+                int u=orden.get(i), v=orden.get(i+1);
+                if (u==v) continue;
+                String d = u+"->"+v, p = Math.min(u,v)+"<->"+Math.max(u,v);
+                if (!dir.contains(d) && !par.contains(p)){
+                    agregarArista(u, v, 1+r.nextInt(20));
+                    dir.add(d); par.add(p); creadas++;
                 }
             }
         }
-
-        while (creadas < m) {
-            int u = random.nextInt(n), v = random.nextInt(n);
-            if (u == v) continue;
-            String key = u + "->" + v;
-            if (conexiones.add(key)) {
-                int dist = 1 + random.nextInt(20);
-                agregarArista(u, v, dist);
-                creadas++;
-            }
+        // Completar
+        while (creadas<m){
+            int u=r.nextInt(n), v=r.nextInt(n);
+            if (u==v) continue;
+            String d = u+"->"+v, p = Math.min(u,v)+"<->"+Math.max(u,v);
+            if (dir.contains(d) || par.contains(p)) continue;
+            agregarArista(u, v, 1+r.nextInt(20));
+            dir.add(d); par.add(p); creadas++;
         }
     }
 
-    // ==== Resultado genérico de camino ====
+    // ===== Resultado común =====
     public static class PathResult {
-        public final List<Integer> path;
-        public final int value; // distancia total (Dijkstra) o víctimas totales (Bellman-Ford)
-        public PathResult(List<Integer> path, int value) { this.path = path; this.value = value; }
+        public final List<Integer> path;  // nodos en orden
+        public final int value;           // distancia total (Dijkstra) o víctimas totales (BF)
+        public PathResult(List<Integer> p, int v){ this.path=p; this.value=v; }
     }
 
-    // ==== Dijkstra: camino más corto ====
-    public PathResult dijkstra(int start, int target) {
+    // ===== Dijkstra: camino más corto (distancia) =====
+    public PathResult dijkstra(int inicio, int guarida){
         int n = nodos.size();
         int[] dist = new int[n];
         int[] parent = new int[n];
         Arrays.fill(dist, Integer.MAX_VALUE);
         Arrays.fill(parent, -1);
-        dist[start] = 0;
+        dist[inicio]=0;
 
-        PriorityQueue<int[]> pq = new PriorityQueue<>(Comparator.comparingInt(a -> a[1]));
-        pq.add(new int[]{start, 0});
+        PriorityQueue<int[]> pq = new PriorityQueue<>(Comparator.comparingInt(a->a[1]));
+        pq.add(new int[]{inicio,0});
 
-        while (!pq.isEmpty()) {
+        while(!pq.isEmpty()){
             int[] cur = pq.poll();
-            int u = cur[0], d = cur[1];
-            if (d != dist[u]) continue;
-            if (u == target) break;
+            int u=cur[0], d=cur[1];
+            if (d!=dist[u]) continue;
+            if (u==guarida) break;
 
-            for (Arista e : obtenerVecinos(u)) {
-                int v = e.getDestino();
-                int nd = d + e.getDistancia();
-                if (nd < dist[v]) {
-                    dist[v] = nd;
-                    parent[v] = u;
+            for (Arista e: obtenerVecinos(u)){
+                int v=e.getDestino(), nd=d+e.getDistancia();
+                if (nd<dist[v]){
+                    dist[v]=nd; parent[v]=u;
                     pq.add(new int[]{v, nd});
                 }
             }
         }
-
-        List<Integer> path = reconstruir(parent, start, target);
-        return new PathResult(path, dist[target]);
+        return new PathResult(reconstruir(parent,inicio,guarida), dist[guarida]);
     }
 
-    private List<Integer> reconstruir(int[] parent, int start, int target) {
-        LinkedList<Integer> path = new LinkedList<>();
-        if (start == target) { path.add(start); return path; }
-        if (target < 0 || target >= parent.length) return path;
-        if (parent[target] == -1) return path;
-        int cur = target;
-        path.addFirst(cur);
-        while (cur != start) {
-            cur = parent[cur];
-            if (cur == -1) { path.clear(); return path; }
-            path.addFirst(cur);
-        }
-        return path;
+    private List<Integer> reconstruir(int[] parent,int s,int t){
+        LinkedList<Integer> p=new LinkedList<>();
+        if (s==t){ p.add(s); return p; }
+        if (t<0||t>=parent.length||parent[t]==-1) return p;
+        for (int cur=t; cur!=-1; cur=parent[cur]){ p.addFirst(cur); if (cur==s) break; }
+        if (p.isEmpty() || p.getFirst()!=s) p.clear();
+        return p;
     }
 
-    // ==== Bellman-Ford adaptado: maximizar víctimas SIN contar doble ====
-    // Ahora incluye víctimas del nodo de inicio.
-    public PathResult maxVictimasBellmanFord(int start, int target) {
+    // ===== Bellman-Ford "max víctimas" con bloqueo de nodos repetidos =====
+    // Peso de una arista u->v = víctimas(v). Se suma también víctimas(inicio).
+    // Para NO contar dos veces una aldea, evitamos cerrar ciclos: si v ya está en el
+    // camino reconstruible de u (v aparece en la cadena parent subyacente), no relajamos u->v.
+    public PathResult maxVictimasBellmanFord(int inicio, int guarida){
         int n = nodos.size();
-        int NEG_INF = Integer.MIN_VALUE / 4;
+        final int NEG = Integer.MIN_VALUE/4;
 
-        int[] score = new int[n];             // víctimas acumuladas máximas al llegar a i
-        int[] parent = new int[n];            // para reconstrucción del camino
-        BitSet[] visitedSet = new BitSet[n];  // nodos ya "contados" en el mejor camino a i
-
-        Arrays.fill(score, NEG_INF);
+        int[] best = new int[n];     // mejor puntaje (víctimas) para llegar a i
+        int[] parent = new int[n];   // padre para reconstrucción
+        Arrays.fill(best, NEG);
         Arrays.fill(parent, -1);
-        for (int i = 0; i < n; i++) visitedSet[i] = new BitSet(n);
 
-        // INCLUIMOS víctimas del inicio
-        score[start] = nodos.get(start).getVictimas();
-        visitedSet[start].set(start); // marcado para no contarlo otra vez
+        // Punto de partida: cuenta víctimas del inicio
+        best[inicio] = nodos.get(inicio).getVictimas();
 
-        boolean updated;
-        for (int it = 0; it < n - 1; it++) {
-            updated = false;
-            for (Arista e : aristas) {
-                int u = e.getOrigen(), v = e.getDestino();
-                if (score[u] == NEG_INF) continue;
+        // n-1 iteraciones
+        for (int iter=0; iter<n-1; iter++){
+            boolean changed = false;
+            for (Arista e : aristas){
+                int u=e.getOrigen(), v=e.getDestino();
+                if (best[u]==NEG) continue;
 
-                // Evita repetir nodos (sin doble conteo de víctimas)
-                if (visitedSet[u].get(v)) continue;
+                // evita repetir nodos en el camino (simple path constraint ligero)
+                if (apareceEnCadena(parent, u, v)) continue;
 
-                int gain = nodos.get(v).getVictimas(); // víctimas de v (solo 1ª vez)
-                int cand = score[u] + gain;
-                if (cand > score[v]) {
-                    score[v] = cand;
+                int cand = best[u] + nodos.get(v).getVictimas(); // sumar v la 1ª vez
+                if (cand > best[v]){
+                    best[v] = cand;
                     parent[v] = u;
-
-                    BitSet bs = (BitSet) visitedSet[u].clone();
-                    bs.set(v);
-                    visitedSet[v] = bs;
-
-                    updated = true;
+                    changed = true;
                 }
             }
-            if (!updated) break;
+            if (!changed) break;
         }
 
-        List<Integer> path = reconstruir(parent, start, target);
-        return new PathResult(path, score[target]);
+        List<Integer> path = reconstruir(parent, inicio, guarida);
+        return new PathResult(path, best[guarida]);
+    }
+
+    // ¿v ya aparece en la cadena de padres desde u hacia el inicio?
+    // (si aparece, relajar u->v introduciría un nodo repetido => doble conteo)
+    private boolean apareceEnCadena(int[] parent, int u, int v){
+        if (u==v) return true;
+        int cur = u;
+        while (cur!=-1){
+            if (cur==v) return true;
+            cur = parent[cur];
+        }
+        return false;
     }
 }
 
